@@ -94,6 +94,12 @@ def _gemini_generate_problem(topic, difficulty):
         "problems genuinely hard (messy integrals needing substitution or parts; higher-"
         "degree, parameterised, or trigonometric equations; product/quotient/chain-rule-"
         "heavy derivatives). The 'problem' text and the 'expr' must describe the SAME thing. "
+        "FORMATTING of the 'problem' text: write EVERY mathematical symbol or expression as "
+        "inline LaTeX wrapped in single dollar signs, e.g. $z^3 = 2\\bar{z}^2$, $\\int e^x "
+        "\\sin x\\,dx$, $x^{10}$. Use ^ with braces for multi-character exponents ($x^{2n}$), "
+        "\\frac for fractions, \\bar, \\sqrt, \\pi, etc. NEVER use backticks, code formatting, "
+        "or markdown in the 'problem' text. (This LaTeX rule is ONLY for 'problem'; 'expr' must "
+        "stay plain SymPy syntax with ** or ^.) "
         "Return only the JSON object."
     )
     url = ("https://generativelanguage.googleapis.com/v1beta/models/"
