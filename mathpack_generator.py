@@ -514,6 +514,169 @@ CHAPTERS.update({
     "vectors": gen_vectors,
 })
 
+# =========================================================================== #
+#  PHASE 2 CHAPTERS  (probability, statistics, circles, 3D, calculus apps, ...)
+# =========================================================================== #
+
+# --- Probability (simple) ---
+def gen_probability(rng, difficulty):
+    r, b = rng.randint(2, 8), rng.randint(2, 8)
+    p = sp.Rational(r, r + b)
+    prob = (rf"A bag contains ${r}$ red and ${b}$ blue balls. One ball is drawn "
+            rf"at random. Find the probability that it is red.")
+    steps = [rf"$P(\text{{red}})=\dfrac{{\text{{favourable}}}}{{\text{{total}}}}"
+             rf"=\dfrac{{{r}}}{{{r}+{b}}}={sp.latex(p)}$."]
+    return Item("Probability", prob, rf"$P(\text{{red}})={sp.latex(p)}$", steps,
+                "Probability recomputed as favourable/total.",
+                {"kind": "prob", "r": r, "b": b, "p": p})
+def _v_prob(p):
+    return sp.Rational(p["r"], p["r"] + p["b"]) == p["p"]
+VNEW["prob"] = _v_prob
+
+# --- Statistics (mean & variance) ---
+def gen_statistics(rng, difficulty):
+    n = rng.randint(4, 6)
+    data = [rng.randint(1, 10) for _ in range(n)]
+    mean = sp.Rational(sum(data), n)
+    var = sum((sp.Rational(d) - mean)**2 for d in data) / n
+    prob = (rf"Find the mean and variance of the data: "
+            rf"${', '.join(str(d) for d in data)}$.")
+    steps = [rf"Mean $\bar{{x}}=\dfrac{{\sum x_i}}{{n}}={sp.latex(mean)}$.",
+             rf"Variance $\sigma^2=\dfrac{{\sum (x_i-\bar{{x}})^2}}{{n}}={sp.latex(var)}$."]
+    ans = rf"Mean $={sp.latex(mean)}$, variance $={sp.latex(var)}$"
+    return Item("Statistics", prob, ans, steps,
+                "Mean and variance recomputed independently.",
+                {"kind": "stats", "data": data, "mean": mean, "var": var})
+def _v_stats(p):
+    n = len(p["data"]); mean = sp.Rational(sum(p["data"]), n)
+    var = sum((sp.Rational(d) - mean)**2 for d in p["data"]) / n
+    return sp.simplify(mean - p["mean"]) == 0 and sp.simplify(var - p["var"]) == 0
+VNEW["stats"] = _v_stats
+
+# --- Circles (conic sections) ---
+def gen_circle(rng, difficulty):
+    X, Y = sp.symbols('x y')
+    h, k, r = rng.randint(-4, 4), rng.randint(-4, 4), rng.randint(2, 5)
+    D, E, F = -2*h, -2*k, h*h + k*k - r*r
+    eq = X**2 + Y**2 + D*X + E*Y + F
+    prob = rf"Find the centre and radius of the circle $ {sp.latex(eq)} = 0 $."
+    steps = [rf"Centre $=\left(-\tfrac{{D}}{{2}},-\tfrac{{E}}{{2}}\right)=({h},{k})$.",
+             rf"Radius $=\sqrt{{(D/2)^2+(E/2)^2-F}}={r}$."]
+    ans = rf"Centre $({h},{k})$, radius $={r}$"
+    return Item("Circles", prob, ans, steps,
+                "Centre and radius satisfy the given equation.",
+                {"kind": "circle", "h": h, "k": k, "r": r, "D": D, "E": E, "F": F})
+def _v_circle(p):
+    return (-p["D"]/2 == p["h"] and -p["E"]/2 == p["k"]
+            and (p["D"]/2)**2 + (p["E"]/2)**2 - p["F"] == p["r"]**2)
+VNEW["circle"] = _v_circle
+
+# --- 3D Geometry (distance between points) ---
+def gen_threed(rng, difficulty):
+    a = [rng.randint(-5, 5) for _ in range(3)]
+    b = [rng.randint(-5, 5) for _ in range(3)]
+    d2 = sum((ai - bi)**2 for ai, bi in zip(a, b))
+    dist = sp.sqrt(d2)
+    prob = (rf"Find the distance between $A({a[0]},{a[1]},{a[2]})$ and "
+            rf"$B({b[0]},{b[1]},{b[2]})$.")
+    steps = [rf"$AB=\sqrt{{(x_2-x_1)^2+(y_2-y_1)^2+(z_2-z_1)^2}}"
+             rf"=\sqrt{{{d2}}}={sp.latex(dist)}$."]
+    return Item("3D Geometry", prob, rf"$AB={sp.latex(dist)}$", steps,
+                "Distance recomputed from the coordinates.",
+                {"kind": "3d", "a": a, "b": b, "dist": dist})
+def _v_3d(p):
+    d2 = sum((ai - bi)**2 for ai, bi in zip(p["a"], p["b"]))
+    return sp.simplify(sp.sqrt(d2) - p["dist"]) == 0
+VNEW["3d"] = _v_3d
+
+# --- Application of Derivatives (maxima / minima) ---
+def gen_maxmin(rng, difficulty):
+    p_ = rng.randint(-4, 2)
+    q_ = p_ + rng.randint(1, 4)
+    fp = sp.expand(3*(x - p_)*(x - q_))          # this is f'(x)
+    f = sp.integrate(fp, x)
+    fpp = sp.diff(fp, x)
+    def kind(pt):
+        return "minimum" if fpp.subs(x, pt) > 0 else "maximum"
+    prob = rf"Find and classify the local extrema of $ f(x) = {sp.latex(f)} $."
+    steps = [rf"$f'(x)={sp.latex(fp)}=0 \Rightarrow x={p_},\ {q_}$.",
+             rf"$f''(x)={sp.latex(fpp)}$: local {kind(p_)} at $x={p_}$, "
+             rf"local {kind(q_)} at $x={q_}$."]
+    ans = rf"Local {kind(p_)} at $x={p_}$; local {kind(q_)} at $x={q_}$"
+    return Item("Application of Derivatives", prob, ans, steps,
+                "Each critical point gives f'(x)=0 (checked).",
+                {"kind": "maxmin", "fp": fp, "crit": [p_, q_]})
+def _v_maxmin(p):
+    return all(sp.simplify(p["fp"].subs(x, c)) == 0 for c in p["crit"])
+VNEW["maxmin"] = _v_maxmin
+
+# --- Differential Equations (dy/dx = f(x)) ---
+def gen_ode(rng, difficulty):
+    c, n, k = rng.randint(1, 4), rng.randint(1, 3), rng.randint(1, 5)
+    rhs = c*x**n + k
+    y = sp.integrate(rhs, x)
+    prob = rf"Solve the differential equation $ \dfrac{{dy}}{{dx}} = {sp.latex(rhs)} $."
+    steps = [rf"Integrate both sides: $ y=\int\left({sp.latex(rhs)}\right)dx $.",
+             rf"$ y = {sp.latex(y)} + C $."]
+    return Item("Differential Equations", prob, rf"$ y = {sp.latex(y)} + C $", steps,
+                "Differentiating the solution returns the right-hand side.",
+                {"kind": "ode", "rhs": rhs, "y": y})
+def _v_ode(p):
+    return sp.simplify(sp.diff(p["y"], x) - p["rhs"]) == 0
+VNEW["ode"] = _v_ode
+
+# --- Inverse Trigonometry (principal values) ---
+def gen_invtrig(rng, difficulty):
+    table = [
+        (r"\sin^{-1}\!\left(\tfrac{1}{2}\right)", sp.asin(sp.Rational(1, 2)), sp.pi/6),
+        (r"\cos^{-1}\!\left(\tfrac{1}{2}\right)", sp.acos(sp.Rational(1, 2)), sp.pi/3),
+        (r"\tan^{-1}(1)", sp.atan(1), sp.pi/4),
+        (r"\sin^{-1}(1)", sp.asin(1), sp.pi/2),
+        (r"\cos^{-1}(0)", sp.acos(0), sp.pi/2),
+        (r"\tan^{-1}(0)", sp.atan(0), sp.Integer(0)),
+        (r"\sin^{-1}\!\left(\tfrac{\sqrt{3}}{2}\right)", sp.asin(sp.sqrt(3)/2), sp.pi/3),
+    ]
+    disp, expr, val = rng.choice(table)
+    prob = rf"Evaluate the principal value of $ {disp} $."
+    steps = [rf"$ {disp} = {sp.latex(val)} $."]
+    return Item("Inverse Trigonometry", prob, rf"$ {sp.latex(val)} $", steps,
+                "Applying the forward function returns the argument.",
+                {"kind": "invtrig", "expr": expr, "val": val})
+def _v_invtrig(p):
+    return sp.simplify(p["expr"] - p["val"]) == 0
+VNEW["invtrig"] = _v_invtrig
+
+# --- Area Under Curves ---
+def gen_area(rng, difficulty):
+    a = rng.randint(0, 2)
+    b = a + rng.randint(1, 3)
+    c, n = rng.randint(1, 4), rng.randint(1, 3)
+    f = c*x**n
+    area = sp.integrate(f, (x, a, b))
+    prob = (rf"Find the area under the curve $ y = {sp.latex(f)} $ "
+            rf"from $ x={a} $ to $ x={b} $.")
+    steps = [rf"Area $ = \int_{{{a}}}^{{{b}}} {sp.latex(f)}\,dx = {sp.latex(area)} $."]
+    return Item("Area Under Curves", prob, rf"$ {sp.latex(area)} $", steps,
+                "Area matches high-precision numeric integration.",
+                {"kind": "area", "f": f, "a": a, "b": b, "area": area})
+def _v_area(p):
+    import mpmath
+    g = sp.lambdify(x, p["f"], "mpmath")
+    q = float(mpmath.quad(g, [p["a"], p["b"]]))
+    return abs(float(p["area"].evalf()) - q) < 1e-6
+VNEW["area"] = _v_area
+
+CHAPTERS.update({
+    "probability": gen_probability,
+    "statistics": gen_statistics,
+    "circles": gen_circle,
+    "threed": gen_threed,
+    "maxmin": gen_maxmin,
+    "differential": gen_ode,
+    "inversetrig": gen_invtrig,
+    "areas": gen_area,
+})
+
 
 # ----------------------------------------------------------------------------- #
 #  Build a pack (list of verified items)
