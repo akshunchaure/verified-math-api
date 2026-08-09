@@ -67,6 +67,75 @@ def _gemini_explain(problem, steps, answer):
     except Exception:
         return None
 
+
+# --------------------------------------------------------------------------- #
+#  Exam-level ("JEE") generation: the AI PROPOSES a hard question, SymPy
+#  INDEPENDENTLY solves + verifies it. The student only ever sees SymPy's
+#  verified answer, never the AI's unchecked one — the whole point of the app.
+# --------------------------------------------------------------------------- #
+def _gemini_generate_problem(topic, difficulty):
+    """Ask Gemini for ONE hard JEE-style problem that reduces to a SymPy-checkable
+    operation (solve/diff/integrate). Returns the raw model text (JSON) or None."""
+    if not GEMINI_API_KEY:
+        return None
+    prompt = (
+        "You are an expert JEE (India, Class 11-12) mathematics problem setter. "
+        f"Create ONE original, challenging problem on the topic \"{topic}\" at difficulty "
+        f"{difficulty} out of 3 (3 = JEE Advanced level, like the harder RD Sharma / NCERT "
+        "exemplar problems). It MUST be solvable by exactly ONE of these operations so a "
+        "computer algebra system can verify the answer: 'solve' (solve an equation for x), "
+        "'diff' (differentiate an expression in x), or 'integrate' (integrate an expression "
+        "in x). Return STRICT JSON ONLY (no markdown fences, no commentary) with exactly "
+        "these keys: {\"problem\": \"<the question a student reads>\", "
+        "\"op\": \"solve|diff|integrate\", \"expr\": \"<equation/expression in plain "
+        "SymPy/Python syntax>\"}. Rules: use ** or ^ for powers, * for multiplication, and "
+        "sin, cos, tan, cot, sec, csc, log, ln, sqrt, exp, e (Euler's number), pi. For "
+        "'solve', expr MUST contain '=' (e.g. 'x**2 - 5*x + 6 = 0'). Make difficulty-3 "
+        "problems genuinely hard (messy integrals needing substitution or parts; higher-"
+        "degree, parameterised, or trigonometric equations; product/quotient/chain-rule-"
+        "heavy derivatives). The 'problem' text and the 'expr' must describe the SAME thing. "
+        "Return only the JSON object."
+    )
+    url = ("https://generativelanguage.googleapis.com/v1beta/models/"
+           f"{GEMINI_MODEL}:generateContent")
+    body = json.dumps({"contents": [{"parts": [{"text": prompt}]}],
+                       "generationConfig": {"temperature": 1.0}}).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception:
+        return None
+
+
+def _parse_problem_json(raw):
+    """Pull the JSON object out of the model text, tolerating ``` code fences."""
+    if not raw:
+        return None
+    t = raw.strip()
+    if t.startswith("```"):
+        t = t.strip("`")
+        nl = t.find("\n")
+        if nl != -1 and t[:nl].strip().lower() in ("json", ""):
+            t = t[nl + 1:]
+    i, j = t.find("{"), t.rfind("}")
+    if i == -1 or j == -1:
+        return None
+    try:
+        obj = json.loads(t[i:j + 1])
+    except Exception:
+        return None
+    if not all(k in obj for k in ("problem", "op", "expr")):
+        return None
+    if obj["op"] not in ("solve", "diff", "integrate"):
+        return None
+    return obj
+
+
 app = FastAPI(title="Verified Math API", version="1.0",
               description="SymPy-verified math: worked solutions + infinite practice.")
 
@@ -158,6 +227,50 @@ def explain_item(req: ExplainItemReq):
         "explanation": explanation,               # null if no key / call failed
         "ai_enabled": bool(GEMINI_API_KEY),
     }
+
+
+# --------------------------------------------------------------------------- #
+#  Exam-level (JEE / Class 11-12) question — AI-proposed, SymPy-verified
+# --------------------------------------------------------------------------- #
+class ExamReq(BaseModel):
+    chapter: str = Field("mixed", description="a topic name (flavour for the AI)")
+    difficulty: int = Field(3, ge=1, le=3, description="1-3; 3 = JEE Advanced level")
+
+
+@app.post("/exam")
+def exam(req: ExamReq):
+    if not GEMINI_API_KEY:
+        raise HTTPException(503, "Exam-level generation needs an AI key on the server.")
+    valid = set(mp.CHAPTERS) | {"mixed"}
+    topic = req.chapter if req.chapter in valid else "mixed"
+    last_err = None
+    for _ in range(5):                       # generate -> verify -> retry if not checkable
+        obj = _parse_problem_json(_gemini_generate_problem(topic, req.difficulty))
+        if obj is None:
+            last_err = "model did not return a valid problem"
+            continue
+        try:
+            # SymPy INDEPENDENTLY solves the proposed question; this is the verification.
+            steps, answer = ss.DISPATCH[obj["op"]](obj["expr"])
+        except Exception as e:
+            last_err = f"unverifiable expression: {e}"
+            continue
+        # reject degenerate results so students always get a real, solvable question
+        if "no closed form" in answer or "no real solution" in answer:
+            last_err = "generated a degenerate problem"
+            continue
+        return {
+            "chapter": topic,
+            "difficulty": req.difficulty,
+            "problem": obj["problem"],
+            "op": obj["op"],
+            "expr": obj["expr"],
+            "steps": steps,                  # SymPy-verified worked solution
+            "answer": answer,                # SymPy-verified answer (never the AI's)
+            "verified": True,
+        }
+    raise HTTPException(502, f"Couldn't generate a verified question — please try again. "
+                            f"({last_err or 'unknown'})")
 
 
 # --------------------------------------------------------------------------- #
