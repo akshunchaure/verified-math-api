@@ -141,6 +141,26 @@ def explain(req: ExplainReq):
 
 
 # --------------------------------------------------------------------------- #
+#  Plain-English explanation for a PRACTICE ITEM (already-generated problem)
+#  The practice generator produces problems with their own verified solution
+#  steps, so we ask Gemini to re-word THOSE steps (it never changes the maths).
+# --------------------------------------------------------------------------- #
+class ExplainItemReq(BaseModel):
+    problem: str = Field(..., description="the practice problem (may contain LaTeX)")
+    solution: List[str] = Field(default_factory=list, description="the verified solution steps")
+    answer: str = Field("", description="the final verified answer")
+
+
+@app.post("/explain_item")
+def explain_item(req: ExplainItemReq):
+    explanation = _gemini_explain(req.problem, req.solution, req.answer)
+    return {
+        "explanation": explanation,               # null if no key / call failed
+        "ai_enabled": bool(GEMINI_API_KEY),
+    }
+
+
+# --------------------------------------------------------------------------- #
 #  Verified problem generator
 # --------------------------------------------------------------------------- #
 class GenReq(BaseModel):
