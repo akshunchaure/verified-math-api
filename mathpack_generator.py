@@ -898,28 +898,35 @@ CHAPTERS.update({
 #  Build a pack (list of verified items)
 # ----------------------------------------------------------------------------- #
 def build_pack(chapter: str, count: int, difficulty: int, rng: random.Random) -> List[Item]:
-    plan = (list(CHAPTERS.keys()) if chapter == "mixed" else [chapter])
+    # `count` is always the TOTAL number of problems in the pack.
+    # For "mixed" we spread those problems across a shuffled rotation of every
+    # chapter (round-robin) so the set stays varied; for a single chapter we
+    # just draw `count` problems from that one chapter.
+    mixed = (chapter == "mixed")
+    plan = list(CHAPTERS.keys()) if mixed else [chapter]
+    if mixed:
+        rng.shuffle(plan)                                 # vary which topics lead
     items: List[Item] = []
-    seen = set()                                          # global de-dup across all chapters
-    per = count if chapter != "mixed" else max(1, count)  # count = per-chapter when mixed
-    for ch in plan:
-        made = 0
-        attempts = 0
-        while made < per:
-            attempts += 1
-            if attempts > per * 200:
-                raise RuntimeError(
-                    f"stuck generating '{ch}' — try a smaller --count "
-                    f"(this topic has a limited pool at this difficulty)")
-            it = CHAPTERS[ch](rng, difficulty)
-            key = it.problem_latex
-            if key in seen:                               # no repeats within a pack
-                continue
-            if not verify(it):                            # <-- the hard gate
-                continue
-            seen.add(key)
-            items.append(it)
-            made += 1
+    seen = set()                                          # global de-dup across the pack
+    attempts = 0
+    max_attempts = max(200, count * 400)                  # generous headroom for the verify gate
+    i = 0
+    while len(items) < count:
+        attempts += 1
+        if attempts > max_attempts:
+            raise RuntimeError(
+                "stuck generating a verified pack — try a smaller count "
+                "(limited problem pool at this difficulty)")
+        ch = plan[i % len(plan)]                          # round-robin across the plan
+        i += 1
+        it = CHAPTERS[ch](rng, difficulty)
+        key = it.problem_latex
+        if key in seen:                                   # no repeats within a pack
+            continue
+        if not verify(it):                                # <-- the hard gate
+            continue
+        seen.add(key)
+        items.append(it)
     return items
 
 
@@ -1021,7 +1028,7 @@ def main():
     ap.add_argument("--chapter", choices=list(CHAPTERS) + ["mixed"], default="mixed",
                     help="topic to generate (or 'mixed' for all)")
     ap.add_argument("--count", type=int, default=5,
-                    help="problems per chapter (mixed) or total (single chapter)")
+                    help="total number of problems in the pack")
     ap.add_argument("--difficulty", type=int, choices=[1, 2, 3], default=2,
                     help="1=foundational, 2=moderate, 3=advanced")
     ap.add_argument("--answers", choices=["with", "separate", "none"], default="with",
