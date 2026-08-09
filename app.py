@@ -143,7 +143,7 @@ def _parse_problem_json(raw):
 
 
 app = FastAPI(title="Verified Math API", version="1.0",
-              description="SymPy-verified math: worked solutions + infinite practice.")
+              description="Machine-verified math: worked solutions + infinite practice.")
 
 # Allow the Lovable front-end (any origin) to call this API.
 app.add_middleware(
@@ -159,7 +159,7 @@ app.add_middleware(
 # --------------------------------------------------------------------------- #
 @app.get("/health")
 def health():
-    return {"status": "ok", "engine": "sympy", "chapters": list(mp.CHAPTERS),
+    return {"status": "ok", "engine": "machine", "chapters": list(mp.CHAPTERS),
             "ai_explanations": bool(GEMINI_API_KEY)}
 
 
