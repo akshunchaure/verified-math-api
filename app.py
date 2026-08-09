@@ -19,7 +19,10 @@ ENDPOINTS
     POST /generate {chapter,count,difficulty,seed} -> verified problem set
 """
 
+import json
+import os
 import random
+import urllib.request
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -28,6 +31,41 @@ from pydantic import BaseModel, Field
 
 import mathpack_generator as mp
 import step_solver as ss
+
+# --- Optional Gemini layer (plain-English explanations of VERIFIED steps) ---
+# Set GEMINI_API_KEY (and optionally GEMINI_MODEL) as environment variables on
+# the server. The AI only RE-WORDS steps SymPy already verified; it never
+# changes a number or the answer. With no key, /explain still returns the
+# verified steps + answer (explanation = null).
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+
+
+def _gemini_explain(problem, steps, answer):
+    if not GEMINI_API_KEY:
+        return None
+    prompt = (
+        "You are a warm, encouraging maths teacher. The steps below have ALREADY "
+        "been verified as correct by a computer algebra system. Rewrite them as a "
+        "short, clear plain-English explanation a student can follow (4-8 sentences). "
+        "Do NOT change any number, expression, or the final answer, and do not add "
+        "new steps.\n\n"
+        f"Problem: {problem}\n\nVerified steps:\n" + "\n".join(steps) +
+        f"\n\nVerified final answer: {answer}\n\nExplanation:"
+    )
+    url = ("https://generativelanguage.googleapis.com/v1beta/models/"
+           f"{GEMINI_MODEL}:generateContent")
+    body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception:
+        return None
 
 app = FastAPI(title="Verified Math API", version="1.0",
               description="SymPy-verified math: worked solutions + infinite practice.")
@@ -46,7 +84,8 @@ app.add_middleware(
 # --------------------------------------------------------------------------- #
 @app.get("/health")
 def health():
-    return {"status": "ok", "engine": "sympy", "chapters": list(mp.CHAPTERS)}
+    return {"status": "ok", "engine": "sympy", "chapters": list(mp.CHAPTERS),
+            "ai_explanations": bool(GEMINI_API_KEY)}
 
 
 @app.get("/chapters")
@@ -73,6 +112,32 @@ def steps(req: StepReq):
     except Exception as e:
         raise HTTPException(422, f"Could not process that expression: {e}")
     return {"op": req.op, "input": req.expr, "steps": step_list, "answer": answer}
+
+
+# --------------------------------------------------------------------------- #
+#  Plain-English explanation (Gemini re-words the VERIFIED steps)
+# --------------------------------------------------------------------------- #
+class ExplainReq(BaseModel):
+    op: str = Field(..., description="solve | diff | integrate")
+    expr: str = Field(..., description="the expression/equation")
+
+
+@app.post("/explain")
+def explain(req: ExplainReq):
+    fn = ss.DISPATCH.get(req.op)
+    if fn is None:
+        raise HTTPException(400, f"op must be one of {list(ss.DISPATCH)}")
+    try:
+        step_list, answer = fn(req.expr)          # SymPy-verified steps + answer
+    except Exception as e:
+        raise HTTPException(422, f"Could not process that expression: {e}")
+    explanation = _gemini_explain(req.expr, step_list, answer)
+    return {
+        "op": req.op, "input": req.expr,
+        "steps": step_list, "answer": answer,
+        "explanation": explanation,               # null if no key / call failed
+        "ai_enabled": bool(GEMINI_API_KEY),
+    }
 
 
 # --------------------------------------------------------------------------- #

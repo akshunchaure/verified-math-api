@@ -294,10 +294,17 @@ CHAPTERS = {
 # =========================================================================== #
 VNEW = {}   # kind -> function(payload) -> bool
 
+
+def _mag(difficulty):
+    """Number magnitude by difficulty: 1->6, 2->9, 3->12 (harder = bigger numbers)."""
+    return 3 + 3 * difficulty
+
 # --- Sequences & Series (AP / GP) ---
 def gen_sequences(rng, difficulty):
     if rng.random() < 0.5:
-        a, d, n = rng.randint(-5, 9), rng.randint(1, 6), rng.randint(5, 15)
+        a = rng.randint(-5, 9)
+        d = rng.randint(1, 2 * difficulty + 2)
+        n = rng.randint(5, 5 + 5 * difficulty)
         tn = a + (n - 1) * d
         Sn = sp.Rational(n, 2) * (2 * a + (n - 1) * d)
         prob = (rf"In an A.P. with first term ${a}$ and common difference ${d}$, "
@@ -389,7 +396,8 @@ VNEW["binom"] = _v_binom
 
 # --- Determinants (3x3) ---
 def gen_determinants(rng, difficulty):
-    M = sp.Matrix(3, 3, lambda i, j: rng.randint(-4, 5))
+    m = _mag(difficulty)
+    M = sp.Matrix(3, 3, lambda i, j: rng.randint(-m, m))
     det = M.det()
     prob = rf"Evaluate $\det(A)$ where $A={sp.latex(M)}$."
     steps = ["Expand by cofactors along the first row.",
@@ -468,8 +476,9 @@ VNEW["pnc"] = _v_pnc
 
 # --- Matrices (2x2: determinant + inverse) ---
 def gen_matrices(rng, difficulty):
+    m = _mag(difficulty)
     while True:
-        M = sp.Matrix(2, 2, lambda i, j: rng.randint(-4, 5))
+        M = sp.Matrix(2, 2, lambda i, j: rng.randint(-m, m))
         if M.det() != 0:
             break
     det, inv = M.det(), M.inv()
@@ -485,8 +494,9 @@ VNEW["mat2"] = _v_mat2
 
 # --- Vectors (dot product + magnitude) ---
 def gen_vectors(rng, difficulty):
-    a = [rng.randint(-4, 5) for _ in range(3)]
-    b = [rng.randint(-4, 5) for _ in range(3)]
+    m = _mag(difficulty)
+    a = [rng.randint(-m, m) for _ in range(3)]
+    b = [rng.randint(-m, m) for _ in range(3)]
     dot = sum(ai * bi for ai, bi in zip(a, b))
     mag = sp.sqrt(sum(ai**2 for ai in a))
     prob = (rf"For $\vec a=({a[0]},{a[1]},{a[2]})$ and $\vec b=({b[0]},{b[1]},{b[2]})$, "
@@ -536,7 +546,7 @@ VNEW["prob"] = _v_prob
 # --- Statistics (mean & variance) ---
 def gen_statistics(rng, difficulty):
     n = rng.randint(4, 6)
-    data = [rng.randint(1, 10) for _ in range(n)]
+    data = [rng.randint(1, 4 + 3 * difficulty) for _ in range(n)]
     mean = sp.Rational(sum(data), n)
     var = sum((sp.Rational(d) - mean)**2 for d in data) / n
     prob = (rf"Find the mean and variance of the data: "
@@ -790,7 +800,7 @@ VNEW["trigval"] = _v_trigval
 
 # --- Series Sums (1..n, squares, cubes) ---
 def gen_seriessum(rng, difficulty):
-    n = rng.randint(5, 20)
+    n = rng.randint(5, 5 + 5 * difficulty)
     typ = rng.choice(["natural", "squares", "cubes"])
     if typ == "natural":
         formula = sp.Integer(n*(n+1)//2); disp = rf"1+2+\cdots+{n}"; fdisp = r"\dfrac{n(n+1)}{2}"
