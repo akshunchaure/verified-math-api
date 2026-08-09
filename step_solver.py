@@ -29,9 +29,16 @@ from sympy.parsing.sympy_parser import (
 _T = standard_transformations + (implicit_multiplication_application, convert_xor)
 x = sp.symbols('x')
 
+# Names that must map to real mathematical constants/functions instead of being
+# treated as plain letters. Critically, lowercase `e` must mean Euler's number
+# (so `e^x` is the exponential, not a symbol `e` to the power x), and `ln` must
+# mean the natural logarithm. pi, E, I, oo, sin, log, sqrt, ... are already
+# recognised by SymPy's parser.
+_LOCALS = {"e": sp.E, "ln": sp.log}
+
 
 def parse(s: str):
-    return parse_expr(s, transformations=_T)
+    return parse_expr(s, transformations=_T, local_dict=_LOCALS)
 
 
 def pick_symbol(expr):
@@ -45,8 +52,9 @@ def pick_symbol(expr):
 
 
 def L(expr) -> str:
-    """LaTeX for a SymPy object (no surrounding $)."""
-    return sp.latex(expr)
+    """LaTeX for a SymPy object (no surrounding $). SymPy's `log` IS the natural
+    logarithm, so render it as `\\ln` to match standard maths notation."""
+    return sp.latex(expr).replace(r"\log", r"\ln")
 
 
 def _line(steps, text):
@@ -72,6 +80,8 @@ def solve_steps(text):
     except sp.PolynomialError:
         deg = None
 
+    general_set = None  # set for periodic/transcendental equations (full solution)
+
     if deg == 1:
         a, b = poly.all_coeffs()
         _line(steps, f"Linear equation:  $ {L(a)}\\,{L(var)} + ({L(b)}) = 0 $")
@@ -90,9 +100,41 @@ def solve_steps(text):
         else:
             _line(steps, f"Quadratic formula:  $ {L(var)}=\\dfrac{{-b\\pm\\sqrt{{D}}}}{{2a}} $")
         sol = sp.solve(sp.Eq(expr, 0), var)
+    elif deg is None:
+        # Non-polynomial (trig / exponential / log). These are usually periodic
+        # or transcendental, so report the FULL set of real solutions, not just
+        # the principal one — otherwise the answer is incomplete.
+        from sympy import S, ConditionSet
+        try:
+            gset = sp.solveset(sp.Eq(expr, 0), var, domain=S.Reals)
+        except Exception:
+            gset = None
+        if gset is not None and not isinstance(gset, ConditionSet) and not gset.has(sp.Integral):
+            general_set = gset
+            _line(steps, "Periodic / transcendental equation — give the full set of "
+                         "real solutions (not only the principal value).")
+        else:
+            _line(steps, "General equation — solving directly.")
+        try:
+            sol = sp.solve(sp.Eq(expr, 0), var)
+        except Exception:
+            sol = []
     else:
-        _line(steps, "Higher-degree / general equation — solving directly.")
+        _line(steps, f"Degree {deg} polynomial — find all roots.")
         sol = sp.solve(sp.Eq(expr, 0), var)
+
+    # ---- Present the solution ------------------------------------------- #
+    if general_set is not None:
+        from sympy import EmptySet
+        if general_set == EmptySet:
+            _line(steps, f"Solution:  $ {L(var)} \\in \\varnothing $  (no real solution)")
+            return steps, f"$ {L(var)}:\\ \\text{{no real solution}} $"
+        gtex = L(general_set)
+        _line(steps, f"Solution (all real solutions):  $ {L(var)} \\in {gtex} $")
+        ok = all(sp.simplify(expr.subs(var, s)) == 0 for s in sol) if sol else True
+        _line(steps, f"Check: sample solutions substitute back → 0 "
+                     f"{'[OK]' if ok else '[!!]'}")
+        return steps, f"$ {L(var)} \\in {gtex} $"
 
     ok = all(sp.simplify(expr.subs(var, s)) == 0 for s in sol) if sol else False
     sol_tex = ",\\ ".join(L(s) for s in sol) if sol else "\\text{no closed form}"
