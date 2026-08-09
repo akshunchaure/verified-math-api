@@ -942,7 +942,7 @@ LATEX_HEADER = r"""\documentclass[11pt]{article}
 \definecolor{navy}{HTML}{0B3D5C}
 \definecolor{blue}{HTML}{1A7FB5}
 \pagestyle{fancy}\fancyhf{}
-\rhead{\small\color{gray} Verified with SymPy $\cdot$ zero-error practice}
+\rhead{\small\color{gray} Machine-verified $\cdot$ zero-error practice}
 \lhead{\small\color{navy}\textbf{%(brand)s}}
 \cfoot{\small\color{gray}\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
