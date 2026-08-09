@@ -677,6 +677,212 @@ CHAPTERS.update({
     "areas": gen_area,
 })
 
+# =========================================================================== #
+#  PHASE 3 CHAPTERS  (conics, sets, logs, trig values, series, vectors, ...)
+# =========================================================================== #
+
+# --- Parabola ---
+def gen_parabola(rng, difficulty):
+    a = rng.randint(1, 5)
+    prob = rf"For the parabola $ y^2 = {4*a}x $, find the vertex, focus, and directrix."
+    steps = [r"Compare with $ y^2 = 4ax $.",
+             rf"$ 4a={4*a} \Rightarrow a={a} $.",
+             rf"Vertex $(0,0)$, focus $({a},0)$, directrix $ x=-{a} $."]
+    ans = rf"Vertex $(0,0)$, focus $({a},0)$, directrix $ x={-a} $"
+    return Item("Parabola", prob, ans, steps,
+                "A point on the curve is equidistant from focus and directrix.",
+                {"kind": "parab", "a": a})
+def _v_parab(p):
+    a = p["a"]
+    for t in (1, 2, 3):
+        px, py = a*t*t, 2*a*t
+        if sp.simplify(sp.sqrt((px - a)**2 + py**2) - abs(px + a)) != 0:
+            return False
+    return True
+VNEW["parab"] = _v_parab
+
+# --- Ellipse ---
+def gen_ellipse(rng, difficulty):
+    a = rng.randint(3, 6)
+    b = rng.randint(1, a - 1)
+    e = sp.sqrt(1 - sp.Rational(b*b, a*a))
+    prob = (rf"For the ellipse $ \dfrac{{x^2}}{{{a*a}}}+\dfrac{{y^2}}{{{b*b}}}=1 $, "
+            rf"find $a$, $b$, and the eccentricity $e$.")
+    steps = [rf"$ a^2={a*a}\Rightarrow a={a} $;  $ b^2={b*b}\Rightarrow b={b} $.",
+             rf"$ e=\sqrt{{1-\dfrac{{b^2}}{{a^2}}}}={sp.latex(e)} $."]
+    ans = rf"$ a={a},\ b={b},\ e={sp.latex(e)} $"
+    return Item("Ellipse", prob, ans, steps,
+                "Verified the relation between a, b and eccentricity.",
+                {"kind": "ellipse", "a": a, "b": b, "e": e})
+def _v_ellipse(p):
+    c = p["a"] * p["e"]
+    return sp.simplify(c*c - (p["a"]**2 - p["b"]**2)) == 0
+VNEW["ellipse"] = _v_ellipse
+
+# --- Hyperbola ---
+def gen_hyperbola(rng, difficulty):
+    a = rng.randint(2, 5)
+    b = rng.randint(2, 5)
+    e = sp.sqrt(1 + sp.Rational(b*b, a*a))
+    prob = (rf"For the hyperbola $ \dfrac{{x^2}}{{{a*a}}}-\dfrac{{y^2}}{{{b*b}}}=1 $, "
+            rf"find $a$, $b$, and the eccentricity $e$.")
+    steps = [rf"$ a^2={a*a}\Rightarrow a={a} $;  $ b^2={b*b}\Rightarrow b={b} $.",
+             rf"$ e=\sqrt{{1+\dfrac{{b^2}}{{a^2}}}}={sp.latex(e)} $."]
+    ans = rf"$ a={a},\ b={b},\ e={sp.latex(e)} $"
+    return Item("Hyperbola", prob, ans, steps,
+                "Verified the relation between a, b and eccentricity.",
+                {"kind": "hyper", "a": a, "b": b, "e": e})
+def _v_hyper(p):
+    c = p["a"] * p["e"]
+    return sp.simplify(c*c - (p["a"]**2 + p["b"]**2)) == 0
+VNEW["hyper"] = _v_hyper
+
+# --- Sets (inclusion-exclusion) ---
+def gen_sets(rng, difficulty):
+    nA, nB = rng.randint(10, 30), rng.randint(10, 30)
+    inter = rng.randint(1, min(nA, nB))
+    union = nA + nB - inter
+    prob = (rf"If $ n(A)={nA} $, $ n(B)={nB} $ and $ n(A\cap B)={inter} $, "
+            rf"find $ n(A\cup B) $.")
+    steps = [rf"$ n(A\cup B)=n(A)+n(B)-n(A\cap B)={nA}+{nB}-{inter}={union} $."]
+    return Item("Sets", prob, rf"$ n(A\cup B)={union} $", steps,
+                "Inclusion-exclusion recomputed.",
+                {"kind": "sets", "nA": nA, "nB": nB, "inter": inter, "union": union})
+def _v_sets(p):
+    return p["nA"] + p["nB"] - p["inter"] == p["union"]
+VNEW["sets"] = _v_sets
+
+# --- Logarithms ---
+def gen_log(rng, difficulty):
+    base = rng.choice([2, 3, 5])
+    k = rng.randint(2, 4)
+    xval = base**k
+    prob = rf"Evaluate $ \log_{{{base}}} {xval} $."
+    steps = [rf"$ {xval}={base}^{{{k}}} $, so $ \log_{{{base}}} {xval} = {k} $."]
+    return Item("Logarithms", prob, rf"$ {k} $", steps,
+                "Verified base raised to the answer equals the argument.",
+                {"kind": "log", "base": base, "x": xval, "k": k})
+def _v_log(p):
+    return p["base"]**p["k"] == p["x"]
+VNEW["log"] = _v_log
+
+# --- Trigonometric Values (standard angles) ---
+def gen_trigvalues(rng, difficulty):
+    table = [
+        (r"\sin 30^\circ", sp.sin(sp.rad(30)), sp.Rational(1, 2)),
+        (r"\cos 60^\circ", sp.cos(sp.rad(60)), sp.Rational(1, 2)),
+        (r"\tan 45^\circ", sp.tan(sp.rad(45)), sp.Integer(1)),
+        (r"\sin 45^\circ", sp.sin(sp.rad(45)), sp.sqrt(2)/2),
+        (r"\cos 30^\circ", sp.cos(sp.rad(30)), sp.sqrt(3)/2),
+        (r"\sin 90^\circ", sp.sin(sp.rad(90)), sp.Integer(1)),
+        (r"\tan 60^\circ", sp.tan(sp.rad(60)), sp.sqrt(3)),
+        (r"\cos 90^\circ", sp.cos(sp.rad(90)), sp.Integer(0)),
+    ]
+    disp, expr, val = rng.choice(table)
+    prob = rf"Evaluate $ {disp} $."
+    steps = [rf"$ {disp} = {sp.latex(val)} $."]
+    return Item("Trigonometric Values", prob, rf"$ {sp.latex(val)} $", steps,
+                "Verified against the engine's exact value.",
+                {"kind": "trigval", "expr": expr, "val": val})
+def _v_trigval(p):
+    return sp.simplify(p["expr"] - p["val"]) == 0
+VNEW["trigval"] = _v_trigval
+
+# --- Series Sums (1..n, squares, cubes) ---
+def gen_seriessum(rng, difficulty):
+    n = rng.randint(5, 20)
+    typ = rng.choice(["natural", "squares", "cubes"])
+    if typ == "natural":
+        formula = sp.Integer(n*(n+1)//2); disp = rf"1+2+\cdots+{n}"; fdisp = r"\dfrac{n(n+1)}{2}"
+        actual = sum(range(1, n+1))
+    elif typ == "squares":
+        formula = sp.Integer(n*(n+1)*(2*n+1)//6); disp = rf"1^2+2^2+\cdots+{n}^2"; fdisp = r"\dfrac{n(n+1)(2n+1)}{6}"
+        actual = sum(i*i for i in range(1, n+1))
+    else:
+        formula = sp.Integer((n*(n+1)//2)**2); disp = rf"1^3+2^3+\cdots+{n}^3"; fdisp = r"\left(\dfrac{n(n+1)}{2}\right)^2"
+        actual = sum(i**3 for i in range(1, n+1))
+    prob = rf"Find the sum $ {disp} $."
+    steps = [rf"Use $ {fdisp} $ with $ n={n} $:  $ {sp.latex(formula)} $."]
+    return Item("Series Sums", prob, rf"$ {sp.latex(formula)} $", steps,
+                "Formula result matches direct summation.",
+                {"kind": "seriessum", "actual": actual, "formula": formula})
+def _v_seriessum(p):
+    return sp.Integer(p["actual"]) == p["formula"]
+VNEW["seriessum"] = _v_seriessum
+
+# --- Heights & Distances ---
+def gen_heights(rng, difficulty):
+    h = rng.randint(5, 50)
+    ang = rng.choice([30, 45, 60])
+    t = sp.tan(sp.rad(ang))
+    dist = sp.nsimplify(h / t)
+    prob = (rf"A tower is ${h}$ m tall. The angle of elevation of its top from a "
+            rf"point on the ground is ${ang}^\circ$. Find the distance of the point "
+            rf"from the foot of the tower.")
+    steps = [rf"$ \tan {ang}^\circ=\dfrac{{\text{{height}}}}{{\text{{distance}}}} $.",
+             rf"distance $ =\dfrac{{{h}}}{{\tan {ang}^\circ}}={sp.latex(dist)} $ m."]
+    return Item("Heights & Distances", prob, rf"$ {sp.latex(dist)} $ m", steps,
+                "Verified tan(angle) times distance equals the height.",
+                {"kind": "heights", "h": h, "ang": ang, "dist": dist})
+def _v_heights(p):
+    return sp.simplify(sp.tan(sp.rad(p["ang"])) * p["dist"] - p["h"]) == 0
+VNEW["heights"] = _v_heights
+
+# --- Vector Products (cross product) ---
+def gen_cross(rng, difficulty):
+    while True:
+        a = [rng.randint(-4, 4) for _ in range(3)]
+        b = [rng.randint(-4, 4) for _ in range(3)]
+        cross = sp.Matrix(a).cross(sp.Matrix(b))
+        if cross != sp.zeros(3, 1):
+            break
+    prob = (rf"Find $ \vec a\times\vec b $ for $ \vec a=({a[0]},{a[1]},{a[2]}) $ and "
+            rf"$ \vec b=({b[0]},{b[1]},{b[2]}) $.")
+    steps = [r"Expand the determinant with $ \hat i,\hat j,\hat k $.",
+             rf"$ \vec a\times\vec b=({sp.latex(cross[0])},{sp.latex(cross[1])},{sp.latex(cross[2])}) $."]
+    ans = rf"$ \vec a\times\vec b=({sp.latex(cross[0])},{sp.latex(cross[1])},{sp.latex(cross[2])}) $"
+    return Item("Vector Products", prob, ans, steps,
+                "Verified the result is perpendicular to both vectors.",
+                {"kind": "cross", "a": a, "b": b, "cross": list(cross)})
+def _v_cross(p):
+    va, vb, c = sp.Matrix(p["a"]), sp.Matrix(p["b"]), sp.Matrix(p["cross"])
+    return va.dot(c) == 0 and vb.dot(c) == 0 and va.cross(vb) == c
+VNEW["cross"] = _v_cross
+
+# --- Functions (composition) ---
+def gen_functions(rng, difficulty):
+    a, b, c = rng.randint(1, 4), rng.randint(1, 5), rng.randint(1, 4)
+    f = a*x + b
+    g = x**2 + c
+    fog = sp.expand(f.subs(x, g))
+    prob = (rf"If $ f(x)={sp.latex(f)} $ and $ g(x)={sp.latex(g)} $, "
+            rf"find $ (f\circ g)(x)=f(g(x)) $.")
+    steps = [rf"$ f(g(x))=f\left({sp.latex(g)}\right) $.",
+             rf"Substitute:  $ {a}\left({sp.latex(g)}\right)+{b}={sp.latex(fog)} $."]
+    return Item("Functions", prob, rf"$ (f\circ g)(x)={sp.latex(fog)} $", steps,
+                "Verified by numeric evaluation at several points.",
+                {"kind": "fog", "f": f, "g": g, "fog": fog})
+def _v_fog(p):
+    import numpy as np
+    f = sp.lambdify(x, p["f"], "numpy")
+    g = sp.lambdify(x, p["g"], "numpy")
+    fog = sp.lambdify(x, p["fog"], "numpy")
+    return all(abs(f(g(t)) - fog(t)) < 1e-9 for t in (-2.0, 0.5, 1.0, 3.0))
+VNEW["fog"] = _v_fog
+
+CHAPTERS.update({
+    "parabola": gen_parabola,
+    "ellipse": gen_ellipse,
+    "hyperbola": gen_hyperbola,
+    "sets": gen_sets,
+    "logarithms": gen_log,
+    "trigvalues": gen_trigvalues,
+    "seriessums": gen_seriessum,
+    "heights": gen_heights,
+    "crossproduct": gen_cross,
+    "functions": gen_functions,
+})
+
 
 # ----------------------------------------------------------------------------- #
 #  Build a pack (list of verified items)
