@@ -284,7 +284,7 @@ def exam(req: ExamReq):
 # --------------------------------------------------------------------------- #
 class GenReq(BaseModel):
     chapter: str = Field("mixed", description="a chapter name or 'mixed'")
-    count: int = Field(5, ge=1, le=15, description="problems (per chapter if mixed)")
+    count: int = Field(5, ge=1, le=50, description="problems (per chapter if mixed)")
     difficulty: int = Field(2, ge=1, le=3)
     seed: Optional[int] = Field(None, description="omit for a fresh set each call")
 
